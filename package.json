@@ -1,0 +1,14 @@
+{
+  "name": "maison-noir-luxury-todo",
+  "version": "1.0.0",
+  "description": "MAISON NOIR — luxury todo atelier with categories, subtasks, draggable salons, royal analytics, localStorage vault and oblivion auto-purge. Serves on strange port 47329.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 server.py",
+    "start:strange": "python3 server.py -p 47329",
+    "serve:node": "npx --yes serve -l 47329 .",
+    "open": "python3 server.py"
+  },
+  "keywords": ["todo", "luxury", "kanban", "analytics", "localStorage", "drag-and-drop"],
+  "license": "MIT"
+}
