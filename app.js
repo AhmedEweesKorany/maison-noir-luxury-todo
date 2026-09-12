@@ -624,6 +624,14 @@ function init() {
   $$('[data-close]').forEach(b => b.onclick = () => { b.closest('.overlay').classList.add('hidden'); });
   $$('.overlay').forEach(o => o.addEventListener('click', e => { if (e.target === o) o.classList.add('hidden'); }));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { $$('.overlay').forEach(o => o.classList.add('hidden')); $('#taskDrawer').classList.add('hidden'); } if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); $('#searchInput').focus(); } });
+  // drawer dismiss: any click outside the drawer closes it (capture phase,
+  // so it runs before a card's own onclick can open the next task)
+  document.addEventListener('click', e => {
+    const drawer = $('#taskDrawer');
+    if (!drawer || drawer.classList.contains('hidden')) return;
+    if (drawer.contains(e.target)) return;
+    drawer.classList.add('hidden');
+  }, true);
   // settings bindings
   $('#setRetention').onchange = e => { db.settings.retentionMonths = Math.min(60, Math.max(1, Number(e.target.value) || 4)); save(); renderAll(); };
   $('#setPurgeMode').onchange = e => { db.settings.purgeMode = e.target.value; save(); renderAll(); };

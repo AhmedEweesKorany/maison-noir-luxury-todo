@@ -83,7 +83,7 @@ Double-click `index.html` — everything works except CDN charts need internet o
 
 ### 1. Grand Board
 - **New Task** (top-right) → title*, notes, category, salon, status, priority, due date, subtasks.
-- **Cards** show category pill, status badge, priority, due, subtask bar. Click = detail drawer; icons = open / edit / delete.
+- **Cards** show category pill, status badge, priority, due, subtask bar. Click = detail drawer (click anywhere outside, or `Esc`, to dismiss); icons = open / edit / delete.
 - **Drag** any card between salons. Bound salons rewrite status; `done` triggers confetti + `completedAt`.
 - Toolbar: **New Salon**, `show done` toggle, **Purge old** shortcut. Top bar: search, category & priority filters.
 
