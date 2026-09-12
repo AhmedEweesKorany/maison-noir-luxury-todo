@@ -65,7 +65,7 @@ function load() {
     // migrate heirs: every subtask owns a comments thread
     db.tasks.forEach(t => {
       if (!Array.isArray(t.subtasks)) t.subtasks = [];
-      t.subtasks.forEach(s => { if (!Array.isArray(s.comments)) s.comments = []; });
+      t.subtasks.forEach(s => { if (!Array.isArray(s.comments)) s.comments = []; if (!s.createdAt) s.createdAt = t.createdAt || Date.now(); });
     });
   } catch { db = defaultDB(); }
 }
@@ -588,47 +588,9 @@ function openDrawer(id, focusSubId = null) {
           <button data-del title="Remove heir">✕</button>
         </div>
         <div class="comments" data-comments></div>
-        <div class="composer">
-          <textarea data-box rows="2" maxlength="4000" placeholder="Note in Markdown — **bold**, *italic*, \`code\`, - lists, [link](url)…"></textarea>
-          <div class="composer-row">
-            <span class="md-hint">Markdown rendered · <button data-prev>preview</button></span>
-            <button class="btn-ghost small" data-add>Add note</button>
-          </div>
-          <div class="md-preview md-body" data-prevbox style="display:none"></div>
-        </div>`;
-      const list = wrap.querySelector('[data-comments]');
-      const paintComments = () => {
-        list.innerHTML = sub.comments.length ? '' : '<p class="muted" style="margin:2px 0 8px">No notes yet — chronicle this heir below.</p>';
-        sub.comments.slice().sort((a, b) => a.createdAt - b.createdAt).forEach(cm => {
-          const c = document.createElement('div');
-          c.className = 'comment';
-          c.innerHTML = `<div class="md-body" data-body></div>
-            <div class="c-meta"><span>${new Date(cm.createdAt).toLocaleString()}${cm.updatedAt > cm.createdAt ? ' · edited' : ''}</span>
-            <span class="c-actions"><button data-edit>Edit</button><button data-cdel>Delete</button></span></div>`;
-          c.querySelector('[data-body]').innerHTML = mdRender(cm.text);
-          c.querySelector('[data-edit]').onclick = () => {
-            c.innerHTML = `<textarea data-ebox rows="3" maxlength="4000"></textarea>
-              <div class="composer-row"><span class="md-hint">Markdown</span>
-              <span><button class="btn-ghost small" data-cancel>Cancel</button>
-              <button class="btn-gold small" data-esave>Save</button></span></div>`;
-            const ebox = c.querySelector('[data-ebox]');
-            ebox.value = cm.text; ebox.focus();
-            ebox.onkeydown = e => e.stopPropagation();
-            c.querySelector('[data-cancel]').onclick = paintComments;
-            c.querySelector('[data-esave]').onclick = () => {
-              const v = ebox.value.trim();
-              if (!v) return toast('Note cannot be empty');
-              cm.text = v; cm.updatedAt = Date.now(); save(); paintComments(); renderBoard();
-            };
-          };
-          c.querySelector('[data-cdel]').onclick = () => {
-            sub.comments = sub.comments.filter(x => x.id !== cm.id);
-            save(); paintComments(); renderBoard();
-          };
-          list.appendChild(c);
-        });
-      };
-      paintComments();
+        <div data-composer></div>`;
+      paintCommentList(wrap.querySelector('[data-comments]'), t, sub, { host: 'drawer', onChange: () => paintSubs() });
+      wrap.querySelector('[data-composer]').appendChild(composerBox(t, sub, () => paintSubs()));
       const cb = wrap.querySelector('[data-c]');
       cb.onchange = () => {
         sub.done = cb.checked; save(); paintSubs(); renderAll();
@@ -650,21 +612,6 @@ function openDrawer(id, focusSubId = null) {
         rbox.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') commit(true); if (e.key === 'Escape') commit(false); };
         rbox.onblur = () => commit(true);
       };
-      const ta = wrap.querySelector('[data-box]');
-      const prevBox = wrap.querySelector('[data-prevbox]');
-      ta.onkeydown = e => e.stopPropagation();
-      wrap.querySelector('[data-add]').onclick = () => {
-        const v = ta.value.trim();
-        if (!v) return toast('Write the note first');
-        sub.comments.push({ id: uid(), text: v, createdAt: Date.now(), updatedAt: Date.now() });
-        save(); paintComments(); renderBoard(); toast('Note chronicled ◆', true);
-      };
-      wrap.querySelector('[data-prev]').onclick = e => {
-        e.preventDefault();
-        if (prevBox.style.display !== 'none') { prevBox.style.display = 'none'; return; }
-        prevBox.innerHTML = mdRender(ta.value);
-        prevBox.style.display = '';
-      };
       box.appendChild(wrap);
     });
     if (focusSubId) {
@@ -678,7 +625,7 @@ function openDrawer(id, focusSubId = null) {
   paintSubs();
   const addSub = () => {
     const v = $('#drawerSubInput').value.trim(); if (!v) return;
-    t.subtasks = t.subtasks || []; t.subtasks.push({ id: uid(), title: v, done: false, comments: [] });
+    t.subtasks = t.subtasks || []; t.subtasks.push({ id: uid(), title: v, done: false, comments: [], createdAt: Date.now() });
     save(); paintSubs(); renderAll(); openDrawer(t.id);
   };
   $('#drawerSubAdd').onclick = addSub;
@@ -693,6 +640,123 @@ function openDrawer(id, focusSubId = null) {
   $('#drawerEdit').onclick = () => { $('#taskDrawer').classList.add('hidden'); openTaskModal(t.id); };
   $('#drawerDel').onclick = () => { $('#taskDrawer').classList.add('hidden'); delTask(t.id); };
   $('#taskDrawer').classList.remove('hidden');
+}
+
+/* ─────────── HEIR NOTES (shared by drawer + detail modal) ─────────── */
+function paintCommentList(listEl, t, sub, opts = {}) {
+  listEl.innerHTML = (sub.comments || []).length ? '' : '<p class="muted" style="margin:2px 0 8px">No notes yet — chronicle this heir below.</p>';
+  sub.comments.slice().sort((a, b) => a.createdAt - b.createdAt).forEach(cm => {
+    listEl.appendChild(commentCard(t, sub, cm, opts));
+  });
+}
+function commentCard(t, sub, cm, opts = {}) {
+  const expanded = !!opts.expanded;
+  const c = document.createElement('div');
+  c.className = 'comment';
+  const sync = () => {
+    save(); renderBoard();
+    if (opts.onChange) opts.onChange();
+    // drawer sits dimmed behind the modal — keep it fresh too
+    if (opts.host === 'modal' && !$('#taskDrawer').classList.contains('hidden')) openDrawer(t.id, sub.id);
+  };
+  const view = () => {
+    c.innerHTML = `<div class="md-body${expanded ? '' : ' clamped'}" data-body></div>
+      <div class="c-meta"><span>${new Date(cm.createdAt).toLocaleString()}${cm.updatedAt > cm.createdAt ? ' · edited' : ''}</span>
+      <span class="c-actions">${expanded ? '' : '<button data-expand style="display:none">⤢ Expand</button>'}<button data-edit>Edit</button><button data-cdel>Delete</button></span></div>`;
+    c.querySelector('[data-body]').innerHTML = mdRender(cm.text);
+    if (!expanded) {
+      const btn = c.querySelector('[data-expand]');
+      btn.onclick = () => openKidModal(t.id, sub.id);
+      // reveal the expander only when the note truly overflows two lines
+      requestAnimationFrame(() => {
+        const b = c.querySelector('[data-body]');
+        if (b && b.scrollHeight > b.clientHeight + 4) btn.style.display = '';
+      });
+    }
+    c.querySelector('[data-edit]').onclick = edit;
+    c.querySelector('[data-cdel]').onclick = () => {
+      sub.comments = sub.comments.filter(x => x.id !== cm.id);
+      sync();
+    };
+  };
+  const edit = () => {
+    c.innerHTML = `<textarea data-ebox rows="3" maxlength="4000"></textarea>
+      <div class="composer-row"><span class="md-hint">Markdown</span>
+      <span><button class="btn-ghost small" data-cancel>Cancel</button>
+      <button class="btn-gold small" data-esave>Save</button></span></div>`;
+    const ebox = c.querySelector('[data-ebox]');
+    ebox.value = cm.text; ebox.focus();
+    ebox.onkeydown = e => e.stopPropagation();
+    c.querySelector('[data-cancel]').onclick = view;
+    c.querySelector('[data-esave]').onclick = () => {
+      const v = ebox.value.trim();
+      if (!v) return toast('Note cannot be empty');
+      cm.text = v; cm.updatedAt = Date.now(); sync();
+    };
+  };
+  view();
+  return c;
+}
+function composerBox(t, sub, onChange) {
+  const w = document.createElement('div');
+  w.className = 'composer';
+  w.innerHTML = `<textarea data-box rows="2" maxlength="4000" placeholder="Note in Markdown — **bold**, *italic*, \`code\`, - lists, [link](url)…"></textarea>
+    <div class="composer-row">
+      <span class="md-hint">Markdown rendered · <button data-prev>preview</button></span>
+      <button class="btn-ghost small" data-add>Add note</button>
+    </div>
+    <div class="md-preview md-body" data-prevbox style="display:none"></div>`;
+  const ta = w.querySelector('[data-box]');
+  const prevBox = w.querySelector('[data-prevbox]');
+  ta.onkeydown = e => e.stopPropagation();
+  w.querySelector('[data-add]').onclick = () => {
+    const v = ta.value.trim();
+    if (!v) return toast('Write the note first');
+    sub.comments.push({ id: uid(), text: v, createdAt: Date.now(), updatedAt: Date.now() });
+    save(); renderBoard(); onChange(); toast('Note chronicled ◆', true);
+  };
+  w.querySelector('[data-prev]').onclick = e => {
+    e.preventDefault();
+    if (prevBox.style.display !== 'none') { prevBox.style.display = 'none'; return; }
+    prevBox.innerHTML = mdRender(ta.value);
+    prevBox.style.display = '';
+  };
+  return w;
+}
+/* Centered detail dossier for one heir — full uncut chronicle. */
+function openKidModal(taskId, subId) {
+  const t = db.tasks.find(x => x.id === taskId);
+  const sub = t?.subtasks?.find(x => x.id === subId);
+  if (!t || !sub) return;
+  if (!Array.isArray(sub.comments)) sub.comments = [];
+  const cat = catById(t.categoryId);
+  $('#kidModalTitle').textContent = sub.title;
+  $('#kidModalSub').innerHTML = `heir ${(t.subtasks.indexOf(sub)) + 1}/${t.subtasks.length} of <b>${esc(t.title)}</b>`;
+  const body = $('#kidModalBody');
+  body.innerHTML = `
+    <div class="kid-detail-top">
+      <span class="st ${sub.done ? 'st-done' : 'st-started'}">${sub.done ? '✔ heir crowned' : '◐ heir open'}</span>
+      <span class="cat-pill" style="background:${cat.color}22;color:${cat.color};border:1px solid ${cat.color}55">${esc(cat.name)}</span>
+      <button class="btn-ghost small" data-kidtoggle>${sub.done ? '↩ Reopen heir' : '✔ Crown heir done'}</button>
+    </div>
+    <p class="muted" style="margin:0 0 4px">Parent: <b>${esc(t.title)}</b> · chronicled ${sub.createdAt ? new Date(sub.createdAt).toLocaleString() : '—'} · 💬 ${sub.comments.length} note${sub.comments.length === 1 ? '' : 's'}</p>
+    <div class="d-sec"><h4>Chronicle — uncut</h4><div data-comments></div></div>
+    <div class="d-sec"><h4>Add a note</h4><div data-composer></div></div>`;
+  const scroller = document.querySelector('#kidModal .modal');
+  const keepScroll = () => {
+    const s = scroller ? scroller.scrollTop : 0;
+    openKidModal(taskId, subId);
+    const m = document.querySelector('#kidModal .modal');
+    if (m) m.scrollTop = s;
+  };
+  paintCommentList(body.querySelector('[data-comments]'), t, sub, { expanded: true, host: 'modal', onChange: keepScroll });
+  body.querySelector('[data-composer]').appendChild(composerBox(t, sub, keepScroll));
+  body.querySelector('[data-kidtoggle]').onclick = () => {
+    sub.done = !sub.done; save(); renderBoard(); keepScroll();
+    const st = subStats(t);
+    if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+  };
+  $('#kidModal').classList.remove('hidden');
 }
 
 /* ─────────── MINI MODAL ─────────── */
@@ -753,7 +817,7 @@ function seedDemo() {
     status, priority: pri, createdAt: now - ago * D, completedAt: status === 'done' ? now - Math.max(0, ago - 1) * D : null,
     dueDate: dueIn != null ? todayStr(new Date(now + dueIn * D)) : null,
     panelId: statusToPanel(status),
-    subtasks: (subs || []).map((s, i) => ({ id: uid() + i, title: s[0], done: !!s[1], comments: [] })),
+    subtasks: (subs || []).map((s, i) => ({ id: uid() + i, title: s[0], done: !!s[1], comments: [], createdAt: now - ago * D })),
   });
   db.tasks.push(
     mk('Commission gold-foil invitations', 'Silk 120gsm, deckled edge, maison seal in wax.', 'Luxury', 'new', 'royal', 1, 6, [['Choose paper stock', true], ['Approve calligraphy', false], ['Order wax seals', false]]),
@@ -790,7 +854,7 @@ function init() {
   $('#addCategoryBtn').onclick = () => openCategoryModal();
   $('#addPanelBtn').onclick = () => openPanelModal();
   $('#saveTaskBtn').onclick = saveTaskModal;
-  $('#subAddBtn').onclick = () => { const v = $('#subInput').value.trim(); if (!v) return; draftSubs.push({ id: uid(), title: v, done: false, comments: [] }); $('#subInput').value = ''; renderSubEditor(); };
+  $('#subAddBtn').onclick = () => { const v = $('#subInput').value.trim(); if (!v) return; draftSubs.push({ id: uid(), title: v, done: false, comments: [], createdAt: Date.now() }); $('#subInput').value = ''; renderSubEditor(); };
   $('#subInput').onkeydown = e => { if (e.key === 'Enter') $('#subAddBtn').click(); };
   $('#fPanel').onchange = () => { const p = panelById($('#fPanel').value); if (p.statusRef) $('#fStatus').value = p.statusRef; };
   ['searchInput', 'filterCategory', 'filterPriority', 'showDoneToggle'].forEach(id => $('#' + id).addEventListener('input', () => { renderBoard(); renderKPIs(); }));
@@ -808,6 +872,8 @@ function init() {
     const drawer = $('#taskDrawer');
     if (!drawer || drawer.classList.contains('hidden')) return;
     if (drawer.contains(e.target)) return;
+    // a modal sits above the drawer — its backdrop clicks belong to it
+    if ($$('.overlay').some(o => !o.classList.contains('hidden'))) return;
     drawer.classList.add('hidden');
   }, true);
   // settings bindings

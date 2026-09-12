@@ -165,6 +165,9 @@ chmod +x install-macos.sh launch.sh
   afterwards with timestamps + `edited` flags.
 - Rendering = `marked` + `DOMPurify` sanitization online, built-in escaped fallback offline —
   raw HTML can never execute.
+- Long notes collapse to **two lines**; the **⤢ Expand** button (appearing only on overflowing
+  notes) opens a centered **heir dossier**: full title, crown status toggle, parent + chronicle
+  meta, every note uncut, and its own composer — edits stay in sync with the drawer behind it.
 - Progress auto-computes; completing all heirs suggests `done`.
 - Overdue = red `late!` flag (due < today, not done).
 
@@ -243,7 +246,7 @@ Memorable (`47-329`), unprivileged (>1024), single-instance friendly, trivially 
 
 1. `python3 server.py` → browser opens `:47329`, no console errors.
 2. New Task with 2 subtasks → card shows `▸ heirs · 0/2` tree; unfold and tick inline.
-3. Open card → heir note with `**bold**`, list, `[link](…)` → preview → post → renders gilded; edit shows `edited`.
+3. Open card → heir note with `**bold**`, list, `[link](…)` → preview → post → renders gilded (long notes clamp to 2 lines); ⤢ Expand → centered dossier with the uncut chronicle; edit shows `edited`.
 4. Drag card New → Done → confetti + KPI Today +1 + gauge moves.
 5. Toggle a subtask → bar % updates; complete all → `done` suggestion toast.
 6. Analytics Salon → all 7 canvases render; set Custom Lens 30d → summary tiles change.

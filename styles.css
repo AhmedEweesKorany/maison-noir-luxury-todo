@@ -340,3 +340,8 @@ html[data-theme="light"] .md-body pre{background:#241b10}
 .md-body hr{border:none;border-top:1px solid var(--line2);margin:10px 0}
 .md-body img{max-width:100%;border-radius:10px}
 .md-body del{color:var(--dim)}
+/* ═══ Clamped notes + heir detail dossier ═══ */
+.md-body.clamped{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.c-actions button[data-expand]{color:var(--gold);font-weight:700}
+.c-actions button[data-expand]:hover{background:rgba(212,175,55,.16)}
+.kid-detail-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:2px 0 4px}
