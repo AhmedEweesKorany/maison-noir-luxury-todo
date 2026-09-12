@@ -42,7 +42,7 @@ function defaultDB() {
   return {
     tasks: [], categories: JSON.parse(JSON.stringify(DEFAULT_CATS)),
     panels: JSON.parse(JSON.stringify(DEFAULT_PANELS)),
-    settings: { retentionMonths: 4, autoPurge: true, purgeMode: 'completed', name: '', accent: 'gold' },
+    settings: { retentionMonths: 4, autoPurge: true, purgeMode: 'completed', name: '', accent: 'gold', theme: 'dark' },
     meta: { created: Date.now(), launches: 0 },
   };
 }
@@ -304,16 +304,39 @@ function calcStreak() {
   return s + '-day streak';
 }
 
+/* ─────────── THEME (Onyx Night / Ivory Day) ─────────── */
+function isLight() { return (db?.settings?.theme || 'dark') === 'light'; }
+function ink() { return isLight() ? '#6f6250' : '#a89d86'; }
+function applyTheme(skipCharts = false) {
+  const theme = db.settings.theme === 'light' ? 'light' : 'dark';
+  db.settings.theme = theme;
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.accent = db.settings.accent || 'gold';
+  const btn = $('#themeToggle');
+  if (btn) btn.innerHTML = theme === 'light'
+    ? '<i class="fa-solid fa-moon"></i><span>Dark</span>'
+    : '<i class="fa-solid fa-sun"></i><span>Light</span>';
+  const sel = $('#setTheme');
+  if (sel) sel.value = theme;
+  if (typeof Chart !== 'undefined') Chart.defaults.font.family = "'Changa','Inter',sans-serif";
+  if (!skipCharts && $('#view-analytics')?.classList.contains('active')) renderAnalytics();
+}
+function setTheme(theme, silent = false) {
+  db.settings.theme = theme === 'light' ? 'light' : 'dark';
+  save(); applyTheme();
+  if (!silent) toast(db.settings.theme === 'light' ? 'Ivory Day unveiled ☀️' : 'Onyx Night descends 🌙', true);
+}
+
 /* ─────────── ANALYTICS CHARTS ─────────── */
 function killCharts() { Object.values(charts).forEach(c => { try { c.destroy(); } catch {} }); charts = {}; }
-function goldGrid() { return { color: 'rgba(212,175,55,.12)' }; }
+function goldGrid() { return { color: isLight() ? 'rgba(154,123,30,.18)' : 'rgba(212,175,55,.12)' }; }
 function baseOpts(extra = {}) {
-  return Object.assign({ responsive: true, plugins: { legend: { labels: { color: '#a89d86', font: { size: 11 } } } }, scales: { x: { ticks: { color: '#a89d86', font: { size: 10 } }, grid: goldGrid() }, y: { ticks: { color: '#a89d86', font: { size: 10 }, precision: 0 }, grid: goldGrid(), beginAtZero: true } } }, extra);
+  return Object.assign({ responsive: true, plugins: { legend: { labels: { color: ink(), font: { size: 11 } } } }, scales: { x: { ticks: { color: ink(), font: { size: 10 } }, grid: goldGrid() }, y: { ticks: { color: ink(), font: { size: 10 }, precision: 0 }, grid: goldGrid(), beginAtZero: true } } }, extra);
 }
 function renderAnalytics() {
   killCharts();
   if (typeof Chart === 'undefined') return;
-  Chart.defaults.font.family = 'Inter';
+  Chart.defaults.font.family = "'Changa','Inter',sans-serif";
   const done = db.tasks.filter(t => t.status === 'done' && t.completedAt);
   // — daily last 14d —
   const days = [...Array(14)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (13 - i)); return d; });
@@ -325,8 +348,8 @@ function renderAnalytics() {
   // — status doughnut —
   const sc = STATUS_ORDER.map(s => db.tasks.filter(t => t.status === s).length);
   charts.status = new Chart($('#chStatus'), { type: 'doughnut',
-    data: { labels: ['new', 'started', 'partially completed', 'done'], datasets: [{ data: sc, backgroundColor: ['#7fb4ff', '#ffcf7d', '#d3a6ff', '#6ee7a8'], borderColor: '#14100c', borderWidth: 4, hoverOffset: 10 }] },
-    options: { responsive: true, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { color: '#a89d86', padding: 14 } } } } });
+    data: { labels: ['new', 'started', 'partially completed', 'done'], datasets: [{ data: sc, backgroundColor: ['#7fb4ff', '#ffcf7d', '#d3a6ff', '#6ee7a8'], borderColor: isLight() ? '#fffdf6' : '#14100c', borderWidth: 4, hoverOffset: 10 }] },
+    options: { responsive: true, cutout: '62%', plugins: { legend: { position: 'bottom', labels: { color: ink(), padding: 14 } } } } });
   $('#statusLegend').innerHTML = STATUS_ORDER.map((s, i) => `<span>◆ ${s}: <b style="color:var(--gold2)">${sc[i]}</b></span>`).join('');
   // — cumulative —
   let acc = 0; const cum = days.map(d => acc += done.filter(t => todayStr(new Date(t.completedAt)) === todayStr(d)).length);
@@ -339,11 +362,11 @@ function renderAnalytics() {
   // — category polar —
   charts.cat = new Chart($('#chCategory'), { type: 'polarArea',
     data: { labels: db.categories.map(c => c.name), datasets: [{ data: db.categories.map(c => db.tasks.filter(t => t.categoryId === c.id && t.status === 'done').length), backgroundColor: db.categories.map(c => c.color + 'AA'), borderColor: db.categories.map(c => c.color), borderWidth: 1 }] },
-    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: '#a89d86' } } }, scales: { r: { ticks: { display: false }, grid: { color: 'rgba(212,175,55,.15)' }, angleLines: { color: 'rgba(212,175,55,.15)' } } } } });
+    options: { responsive: true, plugins: { legend: { position: 'bottom', labels: { color: ink() } } }, scales: { r: { ticks: { display: false }, grid: { color: isLight() ? 'rgba(154,123,30,.25)' : 'rgba(212,175,55,.15)' }, angleLines: { color: isLight() ? 'rgba(154,123,30,.25)' : 'rgba(212,175,55,.15)' } } } } });
   // — priority radar + panels bar —
   charts.pri = new Chart($('#chPriority'), { type: 'radar',
     data: { labels: ['low', 'medium', 'high', 'royal 👑'], datasets: [{ label: 'Created', data: ['low', 'medium', 'high', 'royal'].map(p => db.tasks.filter(t => t.priority === p).length), backgroundColor: 'rgba(212,175,55,.18)', borderColor: '#d4af37', pointBackgroundColor: '#f3d97b' }, { label: 'Done', data: ['low', 'medium', 'high', 'royal'].map(p => db.tasks.filter(t => t.priority === p && t.status === 'done').length), backgroundColor: 'rgba(110,231,168,.15)', borderColor: '#6ee7a8', pointBackgroundColor: '#6ee7a8' }] },
-    options: { responsive: true, plugins: { legend: { labels: { color: '#a89d86' } } }, scales: { r: { ticks: { display: false }, grid: { color: 'rgba(212,175,55,.15)' }, angleLines: { color: 'rgba(212,175,55,.15)' }, pointLabels: { color: '#a89d86' } } } } });
+    options: { responsive: true, plugins: { legend: { labels: { color: ink() } } }, scales: { r: { ticks: { display: false }, grid: { color: isLight() ? 'rgba(154,123,30,.25)' : 'rgba(212,175,55,.15)' }, angleLines: { color: isLight() ? 'rgba(154,123,30,.25)' : 'rgba(212,175,55,.15)' }, pointLabels: { color: ink() } } } } });
   charts.panels = new Chart($('#chPanels'), { type: 'bar',
     data: { labels: db.panels.map(p => p.title.slice(0, 18)), datasets: [{ data: db.panels.map(p => db.tasks.filter(t => (t.panelId || statusToPanel(t.status)) === p.id).length), backgroundColor: db.panels.map(p => p.color), borderRadius: 7 }] },
     options: Object.assign(baseOpts({ indexAxis: 'y', plugins: { legend: { display: false } } })) });
@@ -360,7 +383,7 @@ function renderCustomLens() {
   const keys = Object.keys(map).sort();
   charts.custom = new Chart($('#chCustom'), { type: 'line',
     data: { labels: keys.length ? keys : [from, to], datasets: [{ label: `Done ${from} → ${to}`, data: keys.length ? keys.map(k => map[k]) : [0, 0], borderColor: '#e8a0bf', backgroundColor: 'rgba(232,160,191,.15)', fill: true, tension: .45, pointBackgroundColor: '#e8a0bf' }] },
-    options: baseOpts({ plugins: { legend: { labels: { color: '#a89d86' } } } }) });
+    options: baseOpts({ plugins: { legend: { labels: { color: ink() } } } }) });
   const byCat = {};
   done.forEach(t => { const n = catById(t.categoryId).name; byCat[n] = (byCat[n] || 0) + 1; });
   const top = Object.entries(byCat).sort((a, b) => b[1] - a[1])[0];
@@ -450,7 +473,7 @@ function openDrawer(id) {
     <div class="d-sec"><h4>Heirs — subtasks ${s.done}/${s.total} · ${s.pct}%</h4>
       <div class="sub-progress" style="margin-bottom:10px"><div class="bar"><i style="width:${s.pct}%"></i></div></div>
       <div id="drawerSubs"></div>
-      <div class="sub-add"><input id="drawerSubInput" placeholder="Add heir + Enter…" /><button class="btn-ghost small" id="drawerSubAdd">Add</button></div>
+      <div class="sub-add"><input id="drawerSubInput" type="text" placeholder="Add heir + Enter…" maxlength="120" /><button class="btn-ghost small" id="drawerSubAdd">Add</button></div>
     </div>
     <div class="d-sec"><h4>Transmute status</h4>
       <div class="btn-row">${STATUS_ORDER.map(st => `<button class="btn-ghost small" data-st="${st}" style="${t.status === st ? 'border-color:var(--gold);color:var(--gold2)' : ''}">${STATUS[st].icon} ${STATUS[st].label}</button>`).join('')}</div>
@@ -504,9 +527,9 @@ function miniPrompt(title, html, okLabel, cb) {
 function miniConfirm(title, sub, cb) { miniPrompt(title, `<p class="muted">${esc(sub)}</p>`, 'Confirm', cb); }
 function openCategoryModal(existing = null) {
   miniPrompt(existing ? 'Rename category' : 'New category', `
-    <label class="field"><span>Name</span><input id="mCatName" value="${esc(existing?.name || '')}" placeholder="e.g. Couture" /></label>
+    <label class="field"><span>Name</span><input id="mCatName" type="text" value="${esc(existing?.name || '')}" placeholder="e.g. Couture" maxlength="40" /></label>
     <div class="grid2"><label class="field"><span>Color</span><input type="color" id="mCatColor" value="${existing?.color || '#d4af37'}" style="height:42px" /></label>
-    <label class="field"><span>Icon (fa-*)</span><input id="mCatIcon" value="${esc(existing?.icon || 'fa-gem')}" placeholder="fa-gem" /></label></div>`,
+    <label class="field"><span>Icon (fa-*)</span><input id="mCatIcon" type="text" value="${esc(existing?.icon || 'fa-gem')}" placeholder="fa-gem" maxlength="30" /></label></div>`,
     existing ? 'Rename' : 'Create', () => {
       const name = $('#mCatName').value.trim() || 'Untitled';
       const color = $('#mCatColor').value, icon = $('#mCatIcon').value.trim() || 'fa-gem';
@@ -517,7 +540,7 @@ function openCategoryModal(existing = null) {
 }
 function openPanelModal(existing = null) {
   miniPrompt(existing ? 'Rename salon' : 'New salon (panel)', `
-    <label class="field"><span>Title</span><input id="mPanTitle" value="${esc(existing?.title || '')}" placeholder="e.g. Midnight Ideas" /></label>
+    <label class="field"><span>Title</span><input id="mPanTitle" type="text" value="${esc(existing?.title || '')}" placeholder="e.g. Midnight Ideas" maxlength="50" /></label>
     <div class="grid2"><label class="field"><span>Accent</span><input type="color" id="mPanColor" value="${existing?.color || '#d4af37'}" style="height:42px" /></label>
     <label class="field"><span>Bound status (optional)</span><select id="mPanStatus"><option value="">— free salon —</option>${STATUS_ORDER.map(s => `<option value="${s}" ${existing?.statusRef === s ? 'selected' : ''}>${STATUS[s].icon} ${STATUS[s].label}</option>`).join('')}</select></label></div>
     <p class="muted">Bound salons transmute dropped tasks to that status. Free salons are pure collections.</p>`,
@@ -537,7 +560,7 @@ function renderSettings() {
   $('#setAutoPurge').checked = !!db.settings.autoPurge;
   $('#setName').value = db.settings.name || '';
   $('#setAccent').value = db.settings.accent || 'gold';
-  document.documentElement.dataset.accent = db.settings.accent || 'gold';
+  applyTheme(true);
   const doomed = purgeCandidates();
   $('#purgePreview').textContent = doomed.length
     ? `⚠ ${doomed.length} task(s) are older than ${db.settings.retentionMonths} mo and would be destroyed.`
@@ -581,7 +604,8 @@ function init() {
   db.meta.launches = (db.meta.launches || 0) + 1; save();
   // daily purge guard
   const purged = runPurge(true);
-  document.documentElement.dataset.accent = db.settings.accent || 'gold';
+  if (!['dark', 'light'].includes(db.settings.theme)) db.settings.theme = 'dark';
+  applyTheme(true);
   // nav
   $$('.nav-btn').forEach(b => b.onclick = () => switchView(b.dataset.view));
   $('#newTaskBtn').onclick = () => openTaskModal();
@@ -605,7 +629,9 @@ function init() {
   $('#setPurgeMode').onchange = e => { db.settings.purgeMode = e.target.value; save(); renderAll(); };
   $('#setAutoPurge').onchange = e => { db.settings.autoPurge = e.target.checked; save(); renderAll(); toast(db.settings.autoPurge ? 'Oblivion watches ◆' : 'Oblivion sleeps'); };
   $('#setName').oninput = e => { db.settings.name = e.target.value; save(); };
-  $('#setAccent').onchange = e => { db.settings.accent = e.target.value; document.documentElement.dataset.accent = e.target.value; save(); };
+  $('#setAccent').onchange = e => { db.settings.accent = e.target.value; save(); applyTheme(true); };
+  $('#setTheme').onchange = e => setTheme(e.target.value);
+  $('#themeToggle').onclick = () => setTheme(isLight() ? 'dark' : 'light');
   $('#exportBtn').onclick = () => {
     const blob = new Blob([JSON.stringify(db, null, 2)], { type: 'application/json' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob);

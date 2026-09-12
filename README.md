@@ -2,8 +2,8 @@
 
 > A browser-based **luxury todo list** with categories, subtasks, draggable salons (panels),
 > royal analytics, a 100% `localStorage` vault, and an **Oblivion auto-purge** (default: tasks older
-> than **4 months**, adjustable). Served on the deliberately **strange port `:47329`** to dodge the
-> common dev-port crowds.
+> than **4 months**, adjustable). Set in the **Changa** typeface with **Onyx Night + Ivory Day** auras.
+> Served on the deliberately **strange port `:47329`** to dodge the common dev-port crowds.
 
 ![stack](https://img.shields.io/badge/stack-vanilla%20JS%20%2B%20Chart.js-gold)
 ![storage](https://img.shields.io/badge/storage-localStorage%20only-black)
@@ -25,7 +25,7 @@
 | **Delete tasks > 4 months (adjustable)** | **Oblivion Vault**: `retentionMonths` (default 4, 1–60), scope (`completed only` vs `all`), auto-purge on launch + daily, **Preview doomed** + **Purge now**. Runs silently on boot. |
 | **Statuses: new / started / partially completed / done** | First-class enum everywhere: board columns, badges (`✦ ▶ ◐ ✔`), modal select, drawer transmute buttons, doughnut + filters. Dragging between salons rewrites status; `completedAt` stamped on `done`. |
 
-Extra luxuries: global search (`Ctrl+K`), priority tiers incl. **Royal 👑**, due dates + overdue flags, detail drawer chronicle, 4 accent auras (Gold / Rosé / Emerald / Sapphire), toasts, confetti coronations, responsive + keyboard (`Esc` closes).
+Extra luxuries: global search (`Ctrl+K`), priority tiers incl. **Royal 👑**, due dates + overdue flags, detail drawer chronicle, 4 accent auras (Gold / Rosé / Emerald / Sapphire), **light + dark mode** (top-bar toggle, persisted, charts re-themed), toasts, confetti coronations, responsive + keyboard (`Esc` closes).
 
 ---
 
@@ -105,7 +105,7 @@ Double-click `index.html` — everything works except CDN charts need internet o
 - Scope: **Only completed** (default — safest) or **All tasks**.
 - `Enable automatic purge` — checked = silent purge on launch & daily guard.
 - **Preview doomed** lists victims; **Purge now** executes (with confirm).
-- Identity: name, accent aura; **Export/Import JSON**; **Seed demo atelier** (8 curated tasks); **Burn everything**.
+- Identity: name, accent aura, **appearance (Onyx Night / Ivory Day)**; **Export/Import JSON**; **Seed demo atelier** (8 curated tasks); **Burn everything**.
 
 ---
 
@@ -126,7 +126,7 @@ Double-click `index.html` — everything works except CDN charts need internet o
   }],
   "categories": [{ "id": "c-luxury", "name": "Luxury", "color": "#e8a0bf", "icon": "fa-gem" }],
   "panels": [{ "id": "p-new", "title": "✦ New Chamber", "statusRef": "new", "color": "#7fb4ff" }],
-  "settings": { "retentionMonths": 4, "autoPurge": true, "purgeMode": "completed", "name": "", "accent": "gold" },
+  "settings": { "retentionMonths": 4, "autoPurge": true, "purgeMode": "completed", "name": "", "accent": "gold", "theme": "dark" },
   "meta": { "created": 1726051200000, "launches": 3 }
 }
 ```
@@ -189,7 +189,9 @@ Memorable (`47-329`), unprivileged (>1024), single-instance friendly, trivially 
 
 ## 🛠️ Tech Notes
 
-- Vanilla JS (~700 lines, no framework) + Chart.js 4 UMD + canvas-confetti. CSS variables power 4 accent auras.
+- Vanilla JS (~750 lines, no framework) + Chart.js 4 UMD + canvas-confetti. CSS variables power 4 accent auras × 2 appearance themes.
+- Typography: **Changa** (Arabic + Latin, full app + charts) with Playfair Display serif fallback for display headings.
+- Form system: one catch-all luxury rule styles every text-like input + bespoke `appearance:none` dropdowns with gold chevron, focus glow, themed date/color pickers — no browser-default strays in either theme.
 - Drag & drop: native HTML5 (`dragstart/dragover/drop`); touch users can move via modal salon select or drawer status buttons.
 - Dates stored as `YYYY-MM-DD` (due) + epoch ms (created/completed) — timezone-safe comparisons via `toISOString().slice(0,10)`.
 - Charts destroyed before re-render to avoid leaks; `Chart.defaults.font.family = Inter`.

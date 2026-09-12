@@ -7,11 +7,12 @@
 <meta name="description" content="A luxury todo list atelier with categories, subtasks, draggable panels and royal analytics. 100% localStorage." />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Changa:wght@200;300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Inter:wght@300;400;500;600;700&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <link rel="stylesheet" href="./styles.css" />
+<script>try{var t=JSON.parse(localStorage.getItem('luxury_maisontodo_v1')||'{}');var th=(t.settings&&t.settings.theme)||'dark';document.documentElement.dataset.theme=th;document.documentElement.dataset.accent=(t.settings&&t.settings.accent)||'gold';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◆</text></svg>" />
 </head>
 <body>
@@ -53,7 +54,7 @@
 
     <div class="side-foot">
       <div class="port-chip" title="Strange port to avoid common dev ports"><i class="fa-solid fa-plug"></i> :47329</div>
-      <span>v1.0 · handcrafted</span>
+      <span>v1.1 · handcrafted</span>
     </div>
   </aside>
 
@@ -65,7 +66,8 @@
         <p id="viewSubtitle">Drag masterpieces between salons · everything autosaves</p>
       </div>
       <div class="top-actions">
-        <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input id="searchInput" placeholder="Search tasks, notes, subtasks…" /></div>
+        <button id="themeToggle" class="btn-ghost theme-toggle" title="Toggle light / dark aura"><i class="fa-solid fa-sun"></i><span>Light</span></button>
+        <div class="search-box"><i class="fa-solid fa-magnifying-glass"></i><input id="searchInput" type="search" placeholder="Search tasks, notes, subtasks…" /></div>
         <select id="filterCategory"><option value="">All categories</option></select>
         <select id="filterPriority">
           <option value="">All priorities</option>
@@ -113,7 +115,7 @@
     <section id="view-analytics" class="view">
       <div class="analytics-grid">
         <div class="card chart-card span2">
-          <div class="card-head"><h3><i class="fa-solid fa-chart-column"></i>，完成 Rhythm — last 14 days</h3><span class="pill">bar · gold</span></div>
+          <div class="card-head"><h3><i class="fa-solid fa-chart-column"></i> Completion Rhythm — last 14 days</h3><span class="pill">bar · gold</span></div>
           <canvas id="chDaily" height="120"></canvas>
         </div>
         <div class="card chart-card">
@@ -159,8 +161,9 @@
         </div>
         <div class="card">
           <h3><i class="fa-solid fa-user-astronaut"></i> Maison identity</h3>
-          <label class="field"><span>Your name / maison</span><input id="setName" placeholder="e.g. Atelier Ahmed" /></label>
+          <label class="field"><span>Your name / maison</span><input id="setName" type="text" placeholder="e.g. Atelier Ahmed" maxlength="60" /></label>
           <label class="field"><span>Accent aura</span><select id="setAccent"><option value="gold">Royal Gold</option><option value="rose">Rosé Noir</option><option value="emerald">Emerald Empire</option><option value="sapphire">Sapphire Night</option></select></label>
+          <label class="field"><span>Appearance</span><select id="setTheme"><option value="dark">🌙 Onyx Night (dark)</option><option value="light">☀️ Ivory Day (light)</option></select></label>
           <div class="btn-row"><button id="exportBtn" class="btn-ghost"><i class="fa-solid fa-download"></i> Export JSON</button><label class="btn-ghost file"> <i class="fa-solid fa-upload"></i> Import <input type="file" id="importFile" accept=".json" hidden /></label></div>
           <div class="btn-row"><button id="seedBtn" class="btn-ghost">✨ Seed demo atelier</button><button id="wipeBtn" class="btn-ghost danger">Burn everything</button></div>
         </div>
@@ -186,7 +189,7 @@
   <div class="modal luxury">
     <div class="modal-head"><div><h3 id="taskModalTitle">New Masterpiece</h3><p>Compose with intent — details become legacy.</p></div><button class="x" data-close>✕</button></div>
     <div class="modal-body">
-      <label class="field"><span>Title *</span><input id="fTitle" placeholder="e.g. Commission the gold-foil invitations" maxlength="120" /></label>
+      <label class="field"><span>Title *</span><input id="fTitle" type="text" placeholder="e.g. Commission the gold-foil invitations" maxlength="120" /></label>
       <label class="field"><span>Notes</span><textarea id="fDesc" rows="3" placeholder="Silk paper, 120gsm, deckled edge…"></textarea></label>
       <div class="grid2">
         <label class="field"><span>Category</span><select id="fCategory"></select></label>
@@ -199,7 +202,7 @@
       </div>
       <div class="field"><span>Subtasks — children of this masterpiece</span>
         <div id="subEditor"></div>
-        <div class="sub-add"><input id="subInput" placeholder="Add a subtask + Enter…" /><button id="subAddBtn" class="btn-ghost small">Add</button></div>
+        <div class="sub-add"><input id="subInput" type="text" placeholder="Add a subtask + Enter…" maxlength="120" /><button id="subAddBtn" class="btn-ghost small">Add</button></div>
       </div>
     </div>
     <div class="modal-foot"><button class="btn-ghost" data-close>Cancel</button><button id="saveTaskBtn" class="btn-gold">Seal & Save ◆</button></div>
