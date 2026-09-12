@@ -37,6 +37,7 @@ let editingId = null;
 let draftSubs = [];
 let charts = {};
 let lensRange = { from: '', to: '' };
+const expandedKids = new Set(); // board cards with their heir tree unfolded
 
 function defaultDB() {
   return {
@@ -61,6 +62,11 @@ function load() {
     if (!Array.isArray(db.categories) || !db.categories.length) db.categories = JSON.parse(JSON.stringify(DEFAULT_CATS));
     if (!Array.isArray(db.panels) || !db.panels.length) db.panels = JSON.parse(JSON.stringify(DEFAULT_PANELS));
     db.settings = Object.assign(defaultDB().settings, db.settings || {});
+    // migrate heirs: every subtask owns a comments thread
+    db.tasks.forEach(t => {
+      if (!Array.isArray(t.subtasks)) t.subtasks = [];
+      t.subtasks.forEach(s => { if (!Array.isArray(s.comments)) s.comments = []; });
+    });
   } catch { db = defaultDB(); }
 }
 
@@ -87,6 +93,63 @@ function runPurge(silent = false) {
 }
 
 /* ─────────── HELPERS ─────────── */
+/* ─────────── MARKDOWN (heir notes) ───────────
+   marked + DOMPurify when online; built-in lite renderer offline.
+   Unsanitized HTML is NEVER injected — fallback path is escaped. */
+function mdRender(src) {
+  const text = String(src ?? '');
+  if (!text.trim()) return '<p class="muted">—</p>';
+  try {
+    if (typeof window !== 'undefined' && window.marked && typeof window.marked.parse === 'function'
+        && window.DOMPurify && typeof window.DOMPurify.sanitize === 'function') {
+      if (!mdRender._cfg && window.marked.use) { try { window.marked.use({ breaks: true, gfm: true }); } catch {} mdRender._cfg = true; }
+      if (!mdRender._hook) {
+        try {
+          window.DOMPurify.addHook('afterSanitizeAttributes', n => {
+            if (n.tagName === 'A') { n.setAttribute('target', '_blank'); n.setAttribute('rel', 'noopener'); }
+          });
+        } catch {}
+        mdRender._hook = true;
+      }
+      return window.DOMPurify.sanitize(window.marked.parse(text));
+    }
+  } catch {}
+  return mdLite(text);
+}
+function mdLite(raw) {
+  const t = esc(raw ?? '');
+  const fences = [];
+  const fenced = t.replace(/```(\w*)\n([\s\S]*?)```/g, (m, lang, code) => {
+    fences.push(`<pre><code>${code.replace(/^\n+|\n+$/g, '')}</code></pre>`);
+    return `\u0000${fences.length - 1}\u0000`;
+  });
+  const inline = s => s
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*([^*\n]+)\*/g, '$1<em>$2</em>')
+    .replace(/~~([^~]+)~~/g, '<del>$1</del>')
+    .replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  let html = '', inList = null;
+  const closeList = () => { if (inList) { html += inList === 'ul' ? '</ul>' : '</ol>'; inList = null; } };
+  for (const line of fenced.split('\n')) {
+    const ph = line.match(/^\u0000(\d+)\u0000$/);
+    const h = line.match(/^(#{1,4})\s+(.*)/);
+    const q = line.match(/^&gt;\s?(.*)/);
+    const ul = line.match(/^\s*[-*]\s+(.*)/);
+    const ol = line.match(/^\s*\d+[.)]\s+(.*)/);
+    if (ph) { closeList(); html += fences[+ph[1]]; continue; }
+    if (h) { closeList(); html += `<h${h[1].length}>${inline(h[2])}</h${h[1].length}>`; continue; }
+    if (q) { closeList(); html += `<blockquote>${inline(q[1])}</blockquote>`; continue; }
+    if (ul) { if (inList !== 'ul') { closeList(); html += '<ul>'; inList = 'ul'; } html += `<li>${inline(ul[1])}</li>`; continue; }
+    if (ol) { if (inList !== 'ol') { closeList(); html += '<ol>'; inList = 'ol'; } html += `<li>${inline(ol[1])}</li>`; continue; }
+    if (!line.trim()) { closeList(); continue; }
+    closeList(); html += `<p>${inline(line)}</p>`;
+  }
+  closeList();
+  return html || '<p class="muted">—</p>';
+}
+function kidComments(t) { return (t.subtasks || []).reduce((n, s) => n + ((s.comments || []).length), 0); }
+
 function catById(id) { return db.categories.find(c => c.id === id) || db.categories[0]; }
 function panelById(id) { return db.panels.find(p => p.id === id) || db.panels[0]; }
 function subStats(t) {
@@ -108,7 +171,7 @@ function filteredTasks() {
     if (fc && t.categoryId !== fc) return false;
     if (fp && t.priority !== fp) return false;
     if (q) {
-      const hay = (t.title + ' ' + (t.desc || '') + ' ' + (t.subtasks || []).map(s => s.title).join(' ')).toLowerCase();
+      const hay = (t.title + ' ' + (t.desc || '') + ' ' + (t.subtasks || []).map(s => s.title + ' ' + (s.comments || []).map(c => c.text).join(' ')).join(' ')).toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -226,13 +289,39 @@ function taskCard(t) {
       <span class="pri pri-${t.priority}">${t.priority === 'royal' ? '👑 royal' : t.priority}</span>
       ${t.dueDate ? `<span class="due ${isOverdue(t) ? 'over' : ''}"><i class="fa-regular fa-calendar"></i> ${t.dueDate}${isOverdue(t) ? ' · late!' : ''}</span>` : ''}
     </div>
-    ${s.total ? `<div class="sub-progress"><div class="bar"><i style="width:${s.pct}%"></i></div><small>${s.done}/${s.total} subtasks · ${s.pct}%</small></div>` : ''}`;
+    ${s.total ? `<div class="sub-progress"><div class="bar"><i style="width:${s.pct}%"></i></div><small>${s.done}/${s.total} subtasks · ${s.pct}%</small></div>` : ''}
+    ${s.total ? `<div class="kids">
+      <button class="kids-toggle" data-kids-toggle title="Unfold heirs">${expandedKids.has(t.id) ? '▾' : '▸'} <span>heirs · ${s.done}/${s.total}</span>${kidComments(t) ? ` <em class="c-badge">💬 ${kidComments(t)}</em>` : ''}</button>
+      <div class="kids-list" style="${expandedKids.has(t.id) ? '' : 'display:none'}">
+        ${(t.subtasks || []).map(sub => `
+          <div class="kid-row ${sub.done ? 'done' : ''}">
+            <input type="checkbox" data-kid-check="${sub.id}" ${sub.done ? 'checked' : ''} title="Toggle heir" />
+            <span class="kid-title">${esc(sub.title)}</span>
+            ${(sub.comments || []).length
+              ? `<button class="c-badge" data-kid-open="${sub.id}" title="Read heir notes">💬 ${sub.comments.length}</button>`
+              : `<button class="c-add" data-kid-open="${sub.id}" title="Chronicle a note">💬+</button>`}
+          </div>`).join('')}
+      </div>
+    </div>` : ''}`;
   el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', t.id); el.classList.add('dragging'); });
   el.addEventListener('dragend', () => el.classList.remove('dragging'));
   el.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openDrawer(t.id); };
   el.querySelector('[data-a=edit]').onclick = e => { e.stopPropagation(); openTaskModal(t.id); };
   el.querySelector('[data-a=del]').onclick = e => { e.stopPropagation(); delTask(t.id); };
   el.onclick = () => openDrawer(t.id);
+  const tog = el.querySelector('[data-kids-toggle]');
+  if (tog) tog.onclick = e => { e.stopPropagation(); expandedKids.has(t.id) ? expandedKids.delete(t.id) : expandedKids.add(t.id); renderBoard(); };
+  el.querySelectorAll('[data-kid-check]').forEach(cb => {
+    cb.onclick = e => e.stopPropagation();
+    cb.onchange = () => {
+      const sub = (t.subtasks || []).find(x => x.id === cb.dataset.kidCheck);
+      if (!sub) return;
+      sub.done = cb.checked; save(); renderBoard(); renderKPIs();
+      const st = subStats(t);
+      if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+    };
+  });
+  el.querySelectorAll('[data-kid-open]').forEach(b => b.onclick = e => { e.stopPropagation(); openDrawer(t.id, b.dataset.kidOpen); });
   return el;
 }
 function moveTaskToPanel(id, panelId) {
@@ -418,7 +507,7 @@ function renderSubEditor() {
   const box = $('#subEditor'); box.innerHTML = '';
   draftSubs.forEach(s => {
     const r = document.createElement('div'); r.className = 'sub-row';
-    r.innerHTML = `<input type="checkbox" ${s.done ? 'checked' : ''} /><span class="${s.done ? 'done' : ''}">${esc(s.title)}</span><button>✕</button>`;
+    r.innerHTML = `<input type="checkbox" ${s.done ? 'checked' : ''} /><span class="${s.done ? 'done' : ''}">${esc(s.title)}</span>${(s.comments || []).length ? `<em class="c-badge" title="Heir notes">💬 ${s.comments.length}</em>` : ''}<button>✕</button>`;
     r.querySelector('input').onchange = e => { s.done = e.target.checked; renderSubEditor(); };
     r.querySelector('button').onclick = () => { draftSubs = draftSubs.filter(x => x.id !== s.id); renderSubEditor(); };
     box.appendChild(r);
@@ -456,7 +545,7 @@ function saveTaskModal() {
 }
 
 /* ─────────── DRAWER (detail) ─────────── */
-function openDrawer(id) {
+function openDrawer(id, focusSubId = null) {
   const t = db.tasks.find(t => t.id === id);
   if (!t) return;
   const c = catById(t.categoryId), p = panelById(t.panelId || statusToPanel(t.status));
@@ -483,24 +572,113 @@ function openDrawer(id) {
       <button class="btn-ghost small danger" id="drawerDel">Destroy</button>
     </div>`;
   const paintSubs = () => {
-    $('#drawerSubs').innerHTML = (t.subtasks || []).map(x => `
-      <label class="sub-full"><input type="checkbox" data-sub="${x.id}" ${x.done ? 'checked' : ''} /><span style="${x.done ? 'text-decoration:line-through;color:var(--dim)' : ''}">${esc(x.title)}</span>
-      <button data-del-sub="${x.id}" style="margin-left:auto;background:none;border:none;color:var(--dim);cursor:pointer">✕</button></label>`).join('')
-      || '<p class="muted">No heirs yet.</p>';
-    $$('#drawerSubs [data-sub]').forEach(cb => cb.onchange = () => {
-      const sub = t.subtasks.find(x => x.id === cb.dataset.sub);
-      sub.done = cb.checked; save(); paintSubs(); renderAll();
-      const st = subStats(t);
-      if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+    const box = $('#drawerSubs');
+    if (!(t.subtasks || []).length) { box.innerHTML = '<p class="muted">No heirs yet.</p>'; return; }
+    box.innerHTML = '';
+    t.subtasks.forEach(sub => {
+      if (!Array.isArray(sub.comments)) sub.comments = [];
+      const wrap = document.createElement('div');
+      wrap.className = 'kid-full' + (sub.id === focusSubId ? ' flash' : '');
+      wrap.id = 'kid-' + sub.id;
+      wrap.innerHTML = `
+        <div class="kid-head">
+          <input type="checkbox" data-c ${sub.done ? 'checked' : ''} title="Toggle heir" />
+          <span class="kid-title ${sub.done ? 'done' : ''}">${esc(sub.title)}</span>
+          <button data-rename title="Rename heir">✎</button>
+          <button data-del title="Remove heir">✕</button>
+        </div>
+        <div class="comments" data-comments></div>
+        <div class="composer">
+          <textarea data-box rows="2" maxlength="4000" placeholder="Note in Markdown — **bold**, *italic*, \`code\`, - lists, [link](url)…"></textarea>
+          <div class="composer-row">
+            <span class="md-hint">Markdown rendered · <button data-prev>preview</button></span>
+            <button class="btn-ghost small" data-add>Add note</button>
+          </div>
+          <div class="md-preview md-body" data-prevbox style="display:none"></div>
+        </div>`;
+      const list = wrap.querySelector('[data-comments]');
+      const paintComments = () => {
+        list.innerHTML = sub.comments.length ? '' : '<p class="muted" style="margin:2px 0 8px">No notes yet — chronicle this heir below.</p>';
+        sub.comments.slice().sort((a, b) => a.createdAt - b.createdAt).forEach(cm => {
+          const c = document.createElement('div');
+          c.className = 'comment';
+          c.innerHTML = `<div class="md-body" data-body></div>
+            <div class="c-meta"><span>${new Date(cm.createdAt).toLocaleString()}${cm.updatedAt > cm.createdAt ? ' · edited' : ''}</span>
+            <span class="c-actions"><button data-edit>Edit</button><button data-cdel>Delete</button></span></div>`;
+          c.querySelector('[data-body]').innerHTML = mdRender(cm.text);
+          c.querySelector('[data-edit]').onclick = () => {
+            c.innerHTML = `<textarea data-ebox rows="3" maxlength="4000"></textarea>
+              <div class="composer-row"><span class="md-hint">Markdown</span>
+              <span><button class="btn-ghost small" data-cancel>Cancel</button>
+              <button class="btn-gold small" data-esave>Save</button></span></div>`;
+            const ebox = c.querySelector('[data-ebox]');
+            ebox.value = cm.text; ebox.focus();
+            ebox.onkeydown = e => e.stopPropagation();
+            c.querySelector('[data-cancel]').onclick = paintComments;
+            c.querySelector('[data-esave]').onclick = () => {
+              const v = ebox.value.trim();
+              if (!v) return toast('Note cannot be empty');
+              cm.text = v; cm.updatedAt = Date.now(); save(); paintComments(); renderBoard();
+            };
+          };
+          c.querySelector('[data-cdel]').onclick = () => {
+            sub.comments = sub.comments.filter(x => x.id !== cm.id);
+            save(); paintComments(); renderBoard();
+          };
+          list.appendChild(c);
+        });
+      };
+      paintComments();
+      const cb = wrap.querySelector('[data-c]');
+      cb.onchange = () => {
+        sub.done = cb.checked; save(); paintSubs(); renderAll();
+        const st = subStats(t);
+        if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+      };
+      wrap.querySelector('[data-del]').onclick = () => {
+        t.subtasks = t.subtasks.filter(x => x.id !== sub.id);
+        save(); paintSubs(); renderAll();
+      };
+      wrap.querySelector('[data-rename]').onclick = () => {
+        const titleEl = wrap.querySelector('.kid-title');
+        titleEl.innerHTML = `<input type="text" data-rbox value="${esc(sub.title)}" maxlength="120" />`;
+        const rbox = titleEl.querySelector('[data-rbox]');
+        rbox.focus(); rbox.select();
+        let settled = false;
+        const commit = ok => { if (settled) return; settled = true; const v = rbox.value.trim(); if (ok && v) sub.title = v; save(); paintSubs(); renderAll(); };
+        rbox.onclick = e => e.stopPropagation();
+        rbox.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') commit(true); if (e.key === 'Escape') commit(false); };
+        rbox.onblur = () => commit(true);
+      };
+      const ta = wrap.querySelector('[data-box]');
+      const prevBox = wrap.querySelector('[data-prevbox]');
+      ta.onkeydown = e => e.stopPropagation();
+      wrap.querySelector('[data-add]').onclick = () => {
+        const v = ta.value.trim();
+        if (!v) return toast('Write the note first');
+        sub.comments.push({ id: uid(), text: v, createdAt: Date.now(), updatedAt: Date.now() });
+        save(); paintComments(); renderBoard(); toast('Note chronicled ◆', true);
+      };
+      wrap.querySelector('[data-prev]').onclick = e => {
+        e.preventDefault();
+        if (prevBox.style.display !== 'none') { prevBox.style.display = 'none'; return; }
+        prevBox.innerHTML = mdRender(ta.value);
+        prevBox.style.display = '';
+      };
+      box.appendChild(wrap);
     });
-    $$('#drawerSubs [data-del-sub]').forEach(b => b.onclick = () => {
-      t.subtasks = t.subtasks.filter(x => x.id !== b.dataset.delSub); save(); paintSubs(); renderAll(); openDrawer(t.id);
-    });
+    if (focusSubId) {
+      const target = document.getElementById('kid-' + focusSubId);
+      if (target) {
+        setTimeout(() => target.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 60);
+        setTimeout(() => target.classList.remove('flash'), 1800);
+      }
+    }
   };
   paintSubs();
   const addSub = () => {
     const v = $('#drawerSubInput').value.trim(); if (!v) return;
-    t.subtasks = t.subtasks || []; t.subtasks.push({ id: uid(), title: v, done: false });
+    t.subtasks = t.subtasks || []; t.subtasks.push({ id: uid(), title: v, done: false, comments: [] });
     save(); paintSubs(); renderAll(); openDrawer(t.id);
   };
   $('#drawerSubAdd').onclick = addSub;
@@ -575,7 +753,7 @@ function seedDemo() {
     status, priority: pri, createdAt: now - ago * D, completedAt: status === 'done' ? now - Math.max(0, ago - 1) * D : null,
     dueDate: dueIn != null ? todayStr(new Date(now + dueIn * D)) : null,
     panelId: statusToPanel(status),
-    subtasks: (subs || []).map((s, i) => ({ id: uid() + i, title: s[0], done: !!s[1] })),
+    subtasks: (subs || []).map((s, i) => ({ id: uid() + i, title: s[0], done: !!s[1], comments: [] })),
   });
   db.tasks.push(
     mk('Commission gold-foil invitations', 'Silk 120gsm, deckled edge, maison seal in wax.', 'Luxury', 'new', 'royal', 1, 6, [['Choose paper stock', true], ['Approve calligraphy', false], ['Order wax seals', false]]),
@@ -612,7 +790,7 @@ function init() {
   $('#addCategoryBtn').onclick = () => openCategoryModal();
   $('#addPanelBtn').onclick = () => openPanelModal();
   $('#saveTaskBtn').onclick = saveTaskModal;
-  $('#subAddBtn').onclick = () => { const v = $('#subInput').value.trim(); if (!v) return; draftSubs.push({ id: uid(), title: v, done: false }); $('#subInput').value = ''; renderSubEditor(); };
+  $('#subAddBtn').onclick = () => { const v = $('#subInput').value.trim(); if (!v) return; draftSubs.push({ id: uid(), title: v, done: false, comments: [] }); $('#subInput').value = ''; renderSubEditor(); };
   $('#subInput').onkeydown = e => { if (e.key === 'Enter') $('#subAddBtn').click(); };
   $('#fPanel').onchange = () => { const p = panelById($('#fPanel').value); if (p.statusRef) $('#fStatus').value = p.statusRef; };
   ['searchInput', 'filterCategory', 'filterPriority', 'showDoneToggle'].forEach(id => $('#' + id).addEventListener('input', () => { renderBoard(); renderKPIs(); }));

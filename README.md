@@ -18,7 +18,7 @@
 |---|---|
 | **Opens in browser, strange port** | `python3 server.py` → `http://127.0.0.1:47329/` (or `./start.sh`). 47329 avoids 3000/3001/4000/5000/5173/8000/8080/4200/8888/9000. Override with `-p 47913`. |
 | **Categorize tasks** | 6 seeded categories (Personal, Work, Luxury, Health, Finance, Learning) with color + Font-Awesome icon. Create / rename (double-click) / delete. Sidebar counts, top-bar filter, per-category analytics. |
-| **Subtasks of one parent** | Unlimited heirs per task, inline editor in the modal + detail drawer. Progress bar (`done/total · %`). 100% subtasks nudges coronation to `done`. Search digs into subtask text. |
+| **Subtasks of one parent** | Heirs render as a **nested child tree on each card** (unfold ▸/▾, toggle inline, 💬 badges). Each heir owns a **Markdown comment thread** (drawer → notes with preview, edit, timestamps). Progress bar (`done/total · %`). 100% heirs nudges coronation to `done`. Search digs into heir + note text. |
 | **Different panels + drag & drop** | Kanban **salons**. Default 4 bound to statuses; create unlimited **free salons** or status-bound salons; rename / dissolve / color-code. HTML5 drag & drop — dropping into a status salon **transmutes the task status** (with confetti on `done`). |
 | **Analytics: today / week / month / custom + amazing shapes** | KPI strip (Today · Week Mon→Sun · Month · **Custom Lens** date inputs · completion-rate SVG gauge · streak). Analytics Salon: 14-day gold **bar**, status **doughnut**, cumulative **glowing line**, category **polar**, priority **radar**, panels **bar**, custom-range **line + stat tiles**. Powered by Chart.js, gold/onyx theme. |
 | **Everything in localStorage** | Single key `luxury_maisontodo_v1` → `{tasks, categories, panels, settings, meta}`. Autosaves on every mutation. Storage meter in sidebar. Export / Import JSON backup. Zero backend, zero tracking. |
@@ -156,8 +156,16 @@ chmod +x install-macos.sh launch.sh
 - Sidebar **+** creates (name / color / icon `fa-*`). Double-click renames. ✕ deletes (tasks rehomed, never lost).
 - Click a category to isolate the board; combine with top-bar filters.
 
-### 3. Subtasks
-- Modal editor + drawer checklist. Toggle / delete inline. Progress auto-computes; completing all suggests `done`.
+### 3. Subtasks — heirs with Markdown chronicles
+- **Board cards** nest heirs as children: unfold the `▸ heirs · x/y` toggle, tick boxes inline
+  (card never opens), 💬 badges jump straight to that heir's notes in the drawer.
+- **Drawer** renders each heir as its own block: toggle / inline rename / delete, plus a
+  **comment thread** — write in Markdown (`**bold**`, `*italic*`, `` `code` ``, fences,
+  `- lists`, `[links](…)`, `> quotes`, tables), **preview** before posting, edit / delete
+  afterwards with timestamps + `edited` flags.
+- Rendering = `marked` + `DOMPurify` sanitization online, built-in escaped fallback offline —
+  raw HTML can never execute.
+- Progress auto-computes; completing all heirs suggests `done`.
 - Overdue = red `late!` flag (due < today, not done).
 
 ### 4. Analytics Salon
@@ -187,7 +195,8 @@ chmod +x install-macos.sh launch.sh
     "dueDate": "2026-09-20",             // YYYY-MM-DD | null
     "createdAt": 1726051200000,
     "completedAt": null,                 // stamp when → done
-    "subtasks": [{ "id": "s1", "title": "Approve calligraphy", "done": false }]
+    "subtasks": [{ "id": "s1", "title": "Approve calligraphy", "done": false,
+                   "comments": [{ "id": "m1", "text": "**Vellum** ordered — ETA **Fri**.", "createdAt": 1726051200000, "updatedAt": 1726051200000 }] }]
   }],
   "categories": [{ "id": "c-luxury", "name": "Luxury", "color": "#e8a0bf", "icon": "fa-gem" }],
   "panels": [{ "id": "p-new", "title": "✦ New Chamber", "statusRef": "new", "color": "#7fb4ff" }],
@@ -233,13 +242,14 @@ Memorable (`47-329`), unprivileged (>1024), single-instance friendly, trivially 
 ## 🧪 Verification Checklist (manual, 5 min)
 
 1. `python3 server.py` → browser opens `:47329`, no console errors.
-2. New Task with 2 subtasks → appears in target salon with `0/2` bar.
-3. Drag card New → Done → confetti + KPI Today +1 + gauge moves.
-4. Toggle a subtask → bar % updates; complete all → `done` suggestion toast.
-5. Analytics Salon → all 7 canvases render; set Custom Lens 30d → summary tiles change.
-6. Settings → retention `1`, scope `completed`, Preview → Purge now works; Export downloads JSON; Import restores.
-7. Reload → data persists (DevTools → Application → Local Storage → `luxury_maisontodo_v1`).
-8. Double-click `index.html` offline → CRUD still works (charts need CDN once).
+2. New Task with 2 subtasks → card shows `▸ heirs · 0/2` tree; unfold and tick inline.
+3. Open card → heir note with `**bold**`, list, `[link](…)` → preview → post → renders gilded; edit shows `edited`.
+4. Drag card New → Done → confetti + KPI Today +1 + gauge moves.
+5. Toggle a subtask → bar % updates; complete all → `done` suggestion toast.
+6. Analytics Salon → all 7 canvases render; set Custom Lens 30d → summary tiles change.
+7. Settings → retention `1`, scope `completed`, Preview → Purge now works; Export downloads JSON; Import restores.
+8. Reload → data persists (DevTools → Application → Local Storage → `luxury_maisontodo_v1`).
+9. Double-click `index.html` offline → CRUD + fallback Markdown still work (CDN charts/parse need internet once).
 
 ---
 
@@ -254,7 +264,7 @@ Memorable (`47-329`), unprivileged (>1024), single-instance friendly, trivially 
 
 ## 🛠️ Tech Notes
 
-- Vanilla JS (~750 lines, no framework) + Chart.js 4 UMD + canvas-confetti. CSS variables power 4 accent auras × 2 appearance themes.
+- Vanilla JS (~900 lines, no framework) + Chart.js 4 UMD + canvas-confetti + marked (Markdown) + DOMPurify (XSS sanitize). CSS variables power 4 accent auras × 2 appearance themes.
 - Typography: **Changa** (Arabic + Latin, full app + charts) with Playfair Display serif fallback for display headings.
 - Form system: one catch-all luxury rule styles every text-like input + bespoke `appearance:none` dropdowns with gold chevron, focus glow, themed date/color pickers — no browser-default strays in either theme.
 - Drag & drop: native HTML5 (`dragstart/dragover/drop`); touch users can move via modal salon select or drawer status buttons.
