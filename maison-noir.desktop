@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Maison Todo
+GenericName=Luxury Todo Atelier
+Comment=MAISON NOIR — luxury todo list with analytics. Opens in your browser on strange port :47329.
+Exec=@@APPDIR@@/launch.sh
+Path=@@APPDIR@@
+Icon=@@APPDIR@@/assets/icon.svg
+Terminal=false
+Categories=Office;ProjectManagement;
+Keywords=maison;todo;maison todo;tasks;task manager;atelier;luxury;kanban;productivity;gtd;
+StartupNotify=true

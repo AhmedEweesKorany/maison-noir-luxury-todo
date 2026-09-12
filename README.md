@@ -33,14 +33,23 @@ Extra luxuries: global search (`Ctrl+K`), priority tiers incl. **Royal 👑**, d
 
 ```
 luxury-todo/
-├── index.html      # App shell: sidebar, KPIs, board, analytics, settings, modals, drawer
-├── styles.css      # Onyx + gold luxury theme, glass, grain, aurora, responsive
-├── app.js          # All logic: store, board DnD, subtasks, KPIs, Chart.js analytics, purge
-├── server.py       # Static server on strange :47329 + auto-open browser (argparse)
-├── start.sh        # ./start.sh [port] launcher
-├── package.json    # npm scripts (python server preferred, node `serve` fallback)
-├── LICENSE         # MIT
-└── README.md       # You are here
+├── index.html            # App shell: sidebar, KPIs, board, analytics, settings, modals, drawer
+├── styles.css            # Onyx Night + Ivory Day luxury theme, Changa type, glass, responsive
+├── app.js                # All logic: store, board DnD, subtasks, KPIs, Chart.js analytics, purge
+├── server.py             # Static server on strange :47329 + auto-open browser (argparse)
+├── start.sh              # ./start.sh [port] classic foreground launcher
+├── launch.sh             # Smart launcher (Linux/macOS): reuses server if up, else starts it
+├── launch.bat            # Smart launcher for Windows (same behavior)
+├── maison-noir.desktop   # freedesktop entry template (@@APPDIR@@ filled by installer)
+├── install-linux.sh      # One-command Linux shortcut install / uninstall
+├── install-windows.ps1   # Start Menu shortcut installer (run on Windows)
+├── install-macos.sh      # Spotlight app builder (run on a Mac)
+├── assets/icon.svg       # Gold-onyx marque (Linux icon)
+├── assets/icon.png       # 512px raster marque (macOS paste-icon, fallback)
+├── assets/icon.ico       # Multi-size Windows icon
+├── package.json          # npm scripts (python server preferred, node `serve` fallback)
+├── LICENSE               # MIT
+└── README.md             # You are here
 ```
 
 No build step. No bundler. Two CDN deps (fonts/Chart.js/confetti) with full offline fallback for core CRUD.
@@ -76,6 +85,62 @@ npx --yes serve -l 47329 .
 ### Option C — No server at all
 
 Double-click `index.html` — everything works except CDN charts need internet once.
+
+---
+
+## 🖥️ System shortcut — press a key, type `maison todo`
+
+Install once, then launch the atelier straight from your OS search. The launchers are
+**smart**: if `:47329` already answers they just open the browser, otherwise they start
+the server first. Stopping is always the same: close the terminal running the server,
+or `pkill -f "server.py"` (Linux/macOS) / close the `Maison Noir` window (Windows).
+
+### 🐧 Linux (GNOME, KDE, Xfce, …)
+
+```bash
+cd luxury-todo
+./install-linux.sh
+# → Press Super, type:  maison todo   (matches Name + Keywords)
+```
+
+- Installs `~/.local/share/applications/maison-noir.desktop` with absolute paths, the gold
+  icon, and search keywords — no sudo needed.
+- Verify in terminal: `gtk-launch maison-noir` · Remove: `./install-linux.sh --uninstall`
+- If you **move the folder**, just re-run the installer so paths refresh.
+- Troubleshooting: log out/in or run `update-desktop-database ~/.local/share/applications`
+  (KDE: `kbuildsycoca6 --noincremental`) if the entry doesn't appear instantly. To pin it,
+  right-click the launcher → *Add to Favorites / Pin to Task Manager*. For a desktop icon
+  on GNOME, copy the file to `~/Desktop` and choose *Allow Launching*.
+
+### 🪟 Windows 10 / 11
+
+1. Copy the whole `maison-noir-luxury-todo` folder to your PC (e.g. `Documents`).
+2. Install Python 3 from `python.org` — tick **“Add python.exe to PATH”**.
+3. Right-click `install-windows.ps1` → **Run with PowerShell** (one time).
+4. Press **Win**, type `maison todo`, hit Enter. Pin it or add to Startup from there.
+- How it works: the script drops a `Maison Todo.lnk` (with the gold `.ico`) into your
+  Start Menu Programs folder, pointing at `launch.bat` — Windows Search indexes that name.
+- Troubleshooting: first run may show SmartScreen → *More info → Run anyway*; if PowerShell
+  blocks the script, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once and retry.
+- Remove: delete `Maison Todo` from `%APPDATA%\Microsoft\Windows\Start Menu\Programs`.
+
+### 🍎 macOS (Spotlight)
+
+Run this **on your Mac** (needs only built-in tools + Python 3):
+
+```bash
+cd maison-noir-luxury-todo
+chmod +x install-macos.sh launch.sh
+./install-macos.sh
+# → Press Cmd+Space, type:  maison todo
+```
+
+- Builds `~/Applications/Maison Todo.app` (AppleScript wrapper around `launch.sh`), which is
+  exactly what Spotlight indexes.
+- First launch: right-click the app → *Open* (once) to clear Gatekeeper, or run
+  `xattr -d com.apple.quarantine ~/Applications/Maison\ Todo.app`.
+- Optional gold icon: open `assets/icon.png`, `Cmd+C`, *Get Info* on the app, click its
+  icon, `Cmd+V`. Remove: delete the `.app` from `~/Applications`.
 
 ---
 
