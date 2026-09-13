@@ -672,7 +672,8 @@ function openDrawer(id, focusSubId = null) {
   $('#drawerSubInput').onkeydown = e => { if (e.key === 'Enter') addSub(); };
   $$('#drawerContent [data-st]').forEach(b => b.onclick = () => {
     const prev = t.status; t.status = b.dataset.st;
-    t.panelId = statusToPanel(t.status);
+    // Status and salon are independent when changed from the drawer.
+    // Dragging a whole task into a status-bound salon still changes both.
     if (t.status === 'done' && prev !== 'done') { t.completedAt = Date.now(); celebrate(); }
     if (t.status !== 'done') t.completedAt = null;
     save(); renderAll(); openDrawer(t.id);
