@@ -294,8 +294,9 @@ function taskCard(t) {
       <button class="kids-toggle" data-kids-toggle title="Unfold heirs">${expandedKids.has(t.id) ? '▾' : '▸'} <span>heirs · ${s.done}/${s.total}</span>${kidComments(t) ? ` <em class="c-badge">💬 ${kidComments(t)}</em>` : ''}</button>
       <div class="kids-list" style="${expandedKids.has(t.id) ? '' : 'display:none'}">
         ${(t.subtasks || []).map(sub => `
-          <div class="kid-row ${sub.done ? 'done' : ''}">
-            <input type="checkbox" data-kid-check="${sub.id}" ${sub.done ? 'checked' : ''} title="Toggle heir" />
+          <div class="kid-row ${sub.done ? 'done' : ''}" draggable="true" data-kid-drag="${sub.id}" title="Drag this heir to another task">
+             <span class="kid-grip" title="Drag to another parent"><i class="fa-solid fa-grip-vertical"></i></span>
+             <input type="checkbox" data-kid-check="${sub.id}" ${sub.done ? 'checked' : ''} title="Toggle heir" />
             <span class="kid-title">${esc(sub.title)}</span>
             ${(sub.comments || []).length
               ? `<button class="c-badge" data-kid-open="${sub.id}" title="Read heir notes">💬 ${sub.comments.length}</button>`
@@ -303,7 +304,12 @@ function taskCard(t) {
           </div>`).join('')}
       </div>
     </div>` : ''}`;
-  el.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', t.id); el.classList.add('dragging'); });
+  el.addEventListener('dragstart', e => {
+    // A child drag has its own payload; do not turn its parent task into a drag.
+    if (e.target.closest('[data-kid-drag]')) return;
+    e.dataTransfer.setData('text/plain', t.id); e.dataTransfer.setData('application/x-maison-item', 'task');
+    el.classList.add('dragging');
+  });
   el.addEventListener('dragend', () => el.classList.remove('dragging'));
   el.querySelector('[data-a=open]').onclick = e => { e.stopPropagation(); openDrawer(t.id); };
   el.querySelector('[data-a=edit]').onclick = e => { e.stopPropagation(); openTaskModal(t.id); };
@@ -322,7 +328,41 @@ function taskCard(t) {
     };
   });
   el.querySelectorAll('[data-kid-open]').forEach(b => b.onclick = e => { e.stopPropagation(); openDrawer(t.id, b.dataset.kidOpen); });
+  el.querySelectorAll('[data-kid-drag]').forEach(row => {
+    row.addEventListener('dragstart', e => {
+      e.stopPropagation();
+      e.dataTransfer.setData('application/x-maison-item', 'subtask');
+      e.dataTransfer.setData('application/x-maison-subtask', JSON.stringify({ parentId: t.id, subId: row.dataset.kidDrag }));
+      e.dataTransfer.effectAllowed = 'move'; row.classList.add('kid-dragging');
+    });
+    row.addEventListener('dragend', e => { e.stopPropagation(); row.classList.remove('kid-dragging'); });
+  });
+  // Entire parent card is the destination — drop an heir anywhere on another task.
+  el.addEventListener('dragover', e => {
+    if (e.dataTransfer.types.includes('application/x-maison-subtask')) { e.preventDefault(); e.stopPropagation(); el.classList.add('kid-drop-target'); e.dataTransfer.dropEffect = 'move'; }
+  });
+  el.addEventListener('dragleave', e => { if (!el.contains(e.relatedTarget)) el.classList.remove('kid-drop-target'); });
+  el.addEventListener('drop', e => {
+    const raw = e.dataTransfer.getData('application/x-maison-subtask');
+    if (!raw) return;
+    e.preventDefault(); e.stopPropagation(); el.classList.remove('kid-drop-target');
+    try { const { parentId, subId } = JSON.parse(raw); moveSubtaskToParent(parentId, subId, t.id); } catch { toast('Could not move this heir'); }
+  });
   return el;
+}
+function moveSubtaskToParent(fromParentId, subId, toParentId) {
+  if (!fromParentId || !subId || !toParentId) return;
+  if (fromParentId === toParentId) return toast('That heir already belongs to this parent');
+  const from = db.tasks.find(t => t.id === fromParentId);
+  const to = db.tasks.find(t => t.id === toParentId);
+  const sub = from?.subtasks?.find(s => s.id === subId);
+  if (!from || !to || !sub) return toast('That heir could not be found');
+  from.subtasks = from.subtasks.filter(s => s.id !== subId);
+  to.subtasks = to.subtasks || [];
+  to.subtasks.push(sub); // comments, completion state, and chronology travel intact
+  expandedKids.add(from.id); expandedKids.add(to.id);
+  save(); renderAll();
+  toast(`“${sub.title}” now serves “${to.title}” ◆`, true);
 }
 function moveTaskToPanel(id, panelId) {
   const t = db.tasks.find(t => t.id === id);

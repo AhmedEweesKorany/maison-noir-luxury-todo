@@ -288,7 +288,14 @@ html[data-theme="light"] ::-webkit-scrollbar-thumb{background:rgba(154,123,30,.4
 .kids-toggle{background:none;border:none;color:var(--muted);font-size:11.5px;letter-spacing:.6px;cursor:pointer;padding:2px 0;display:flex;gap:6px;align-items:center;font-family:var(--font-b)}
 .kids-toggle:hover{color:var(--gold2)}
 .kids-list{margin-top:6px;display:flex;flex-direction:column;gap:5px;border-inline-start:2px solid var(--line);padding-inline-start:9px}
-.kid-row{display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--hover);border:1px solid var(--line);border-radius:10px;padding:6px 9px}
+.kid-row{display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--hover);border:1px solid var(--line);border-radius:10px;padding:6px 9px;cursor:grab;transition:.18s}
+.kid-row:hover{border-color:var(--line2);background:var(--input-bg2)}
+.kid-row:active{cursor:grabbing}
+.kid-row.kid-dragging{opacity:.35;transform:scale(.97)}
+.kid-grip{color:var(--dim);font-size:11px;cursor:grab;padding:2px 0}
+.kid-row:hover .kid-grip{color:var(--gold)}
+.task.kid-drop-target{border-color:var(--gold)!important;box-shadow:0 0 0 3px color-mix(in srgb,var(--gold) 30%,transparent),0 16px 35px rgba(0,0,0,.4);transform:translateY(-2px)}
+.task.kid-drop-target::after{content:"Drop heir here — make this the parent";position:absolute;inset:5px;border:1px dashed var(--gold);background:color-mix(in srgb,var(--gold) 17%,transparent);border-radius:11px;z-index:4;display:grid;place-items:center;color:var(--gold2);font-size:12px;font-weight:700;letter-spacing:.4px;pointer-events:none}
 .kid-row input[type=checkbox]{accent-color:var(--gold);width:15px;height:15px;flex:none;cursor:pointer}
 .kid-title{flex:1;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kid-row.done .kid-title{text-decoration:line-through;color:var(--dim)}

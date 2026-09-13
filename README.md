@@ -158,7 +158,9 @@ chmod +x install-macos.sh launch.sh
 
 ### 3. Subtasks — heirs with Markdown chronicles
 - **Board cards** nest heirs as children: unfold the `▸ heirs · x/y` toggle, tick boxes inline
-  (card never opens), 💬 badges jump straight to that heir's notes in the drawer.
+  (card never opens), 💬 badges jump straight to that heir's notes in the drawer. Grab the `⋮`
+  handle on an heir and **drag it onto any other task card** to change its parent; its completion
+  state, comments, and chronicle move with it. The receiving card gains a gold “Drop heir here” aura.
 - **Drawer** renders each heir as its own block: toggle / inline rename / delete, plus a
   **comment thread** — write in Markdown (`**bold**`, `*italic*`, `` `code` ``, fences,
   `- lists`, `[links](…)`, `> quotes`, tables), **preview** before posting, edit / delete
@@ -245,7 +247,8 @@ Memorable (`47-329`), unprivileged (>1024), single-instance friendly, trivially 
 ## 🧪 Verification Checklist (manual, 5 min)
 
 1. `python3 server.py` → browser opens `:47329`, no console errors.
-2. New Task with 2 subtasks → card shows `▸ heirs · 0/2` tree; unfold and tick inline.
+2. New Task with 2 subtasks → card shows `▸ heirs · 0/2` tree; unfold and tick inline. Drag its `⋮`
+   handle onto another task → gold drop target appears; release → the heir, notes, and state move.
 3. Open card → heir note with `**bold**`, list, `[link](…)` → preview → post → renders gilded (long notes clamp to 2 lines); ⤢ Expand → centered dossier with the uncut chronicle; edit shows `edited`.
 4. Drag card New → Done → confetti + KPI Today +1 + gauge moves.
 5. Toggle a subtask → bar % updates; complete all → `done` suggestion toast.
