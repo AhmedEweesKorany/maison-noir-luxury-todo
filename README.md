@@ -151,6 +151,7 @@ chmod +x install-macos.sh launch.sh
 - **Cards** show category pill, status badge, priority, due, subtask bar. Click = detail drawer (click anywhere outside, or `Esc`, to dismiss); icons = open / edit / delete.
 - **Drag** any card between salons. Bound salons rewrite status; `done` triggers confetti + `completedAt`.
 - **Status vs. salon:** changing status in the task drawer updates **only the status badge** and keeps the task in its current salon. Only dragging a whole task into a status-bound salon moves it and rewrites status together.
+- **Automatic heir status:** after any heir tick, drag, add, or removal, `1…N-1` completed heirs automatically set the parent to **partially completed**; `N/N` automatically crowns it **done**. With `0/N` heirs complete, the app leaves **new** and **started** entirely for your manual choice. Automatic status updates never move the card between salons.
 - Toolbar: **New Salon**, `show done` toggle, **Purge old** shortcut. Top bar: search, category & priority filters.
 
 ### 2. Categories

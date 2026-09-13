@@ -157,6 +157,26 @@ function subStats(t) {
   const done = (t.subtasks || []).filter(s => s.done).length;
   return { total, done, pct: total ? Math.round(done / total * 100) : (t.status === 'done' ? 100 : 0) };
 }
+/* Heirs own completion-derived states:
+   0/N leaves New and Started as deliberate manual choices;
+   1..N-1 becomes partially completed; N/N becomes done.
+   Salon placement is deliberately untouched. */
+function deriveStatusFromHeirs(t, quiet = false) {
+  const { total, done } = subStats(t);
+  if (!total || !done) return false;
+  const next = done === total ? 'done' : 'partial';
+  const previous = t.status;
+  if (previous === next) return false;
+  t.status = next;
+  if (next === 'done') {
+    t.completedAt = Date.now();
+    if (!quiet) { celebrate(); toast('Every heir is complete — task crowned DONE 👑', true); }
+  } else {
+    t.completedAt = null;
+    if (!quiet) toast('Heirs are underway — task marked partially completed ◆', true);
+  }
+  return true;
+}
 function isOverdue(t) {
   if (!t.dueDate || t.status === 'done') return false;
   return t.dueDate < todayStr();
@@ -322,9 +342,9 @@ function taskCard(t) {
     cb.onchange = () => {
       const sub = (t.subtasks || []).find(x => x.id === cb.dataset.kidCheck);
       if (!sub) return;
-      sub.done = cb.checked; save(); renderBoard(); renderKPIs();
-      const st = subStats(t);
-      if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+      sub.done = cb.checked;
+      deriveStatusFromHeirs(t);
+      save(); renderBoard(); renderKPIs();
     };
   });
   el.querySelectorAll('[data-kid-open]').forEach(b => b.onclick = e => { e.stopPropagation(); openDrawer(t.id, b.dataset.kidOpen); });
@@ -360,6 +380,8 @@ function moveSubtaskToParent(fromParentId, subId, toParentId) {
   from.subtasks = from.subtasks.filter(s => s.id !== subId);
   to.subtasks = to.subtasks || [];
   to.subtasks.push(sub); // comments, completion state, and chronology travel intact
+  deriveStatusFromHeirs(from);
+  deriveStatusFromHeirs(to);
   expandedKids.add(from.id); expandedKids.add(to.id);
   save(); renderAll();
   toast(`“${sub.title}” now serves “${to.title}” ◆`, true);
@@ -571,13 +593,13 @@ function saveTaskModal() {
     Object.assign(t, data);
     if (t.status === 'done' && !wasDone) { t.completedAt = Date.now(); celebrate(); }
     if (t.status !== 'done') t.completedAt = null;
-    // auto-suggest partial
-    const s = subStats(t);
-    if (s.total && s.done === s.total && t.status !== 'done') { toast('All subtasks gilded — consider crowning DONE 👑'); }
+    deriveStatusFromHeirs(t, true);
     toast('Masterpiece refined ◆', true);
   } else {
-    db.tasks.push(Object.assign({ id: uid(), createdAt: Date.now(), completedAt: status === 'done' ? Date.now() : null }, data));
-    if (status === 'done') celebrate();
+    const task = Object.assign({ id: uid(), createdAt: Date.now(), completedAt: status === 'done' ? Date.now() : null }, data);
+    db.tasks.push(task);
+    deriveStatusFromHeirs(task, true);
+    if (task.status === 'done') celebrate();
     toast('Sealed into the maison ◆', true);
   }
   $('#taskModal').classList.add('hidden');
@@ -633,12 +655,13 @@ function openDrawer(id, focusSubId = null) {
       wrap.querySelector('[data-composer]').appendChild(composerBox(t, sub, () => paintSubs()));
       const cb = wrap.querySelector('[data-c]');
       cb.onchange = () => {
-        sub.done = cb.checked; save(); paintSubs(); renderAll();
-        const st = subStats(t);
-        if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+        sub.done = cb.checked;
+        deriveStatusFromHeirs(t);
+        save(); paintSubs(); renderAll();
       };
       wrap.querySelector('[data-del]').onclick = () => {
         t.subtasks = t.subtasks.filter(x => x.id !== sub.id);
+        deriveStatusFromHeirs(t);
         save(); paintSubs(); renderAll();
       };
       wrap.querySelector('[data-rename]').onclick = () => {
@@ -666,6 +689,7 @@ function openDrawer(id, focusSubId = null) {
   const addSub = () => {
     const v = $('#drawerSubInput').value.trim(); if (!v) return;
     t.subtasks = t.subtasks || []; t.subtasks.push({ id: uid(), title: v, done: false, comments: [], createdAt: Date.now() });
+    deriveStatusFromHeirs(t);
     save(); paintSubs(); renderAll(); openDrawer(t.id);
   };
   $('#drawerSubAdd').onclick = addSub;
@@ -793,9 +817,9 @@ function openKidModal(taskId, subId) {
   paintCommentList(body.querySelector('[data-comments]'), t, sub, { expanded: true, host: 'modal', onChange: keepScroll });
   body.querySelector('[data-composer]').appendChild(composerBox(t, sub, keepScroll));
   body.querySelector('[data-kidtoggle]').onclick = () => {
-    sub.done = !sub.done; save(); renderBoard(); keepScroll();
-    const st = subStats(t);
-    if (st.total && st.done === st.total && t.status !== 'done') toast('All heirs complete — crown it DONE 👑', true);
+    sub.done = !sub.done;
+    deriveStatusFromHeirs(t);
+    save(); renderBoard(); keepScroll();
   };
   $('#kidModal').classList.remove('hidden');
 }
@@ -870,6 +894,7 @@ function seedDemo() {
     mk('Vintage watch servicing', 'Rolex 1978 — oil, polish, pressure test.', 'Luxury', 'done', 'royal', 8, -8, [['Drop at horologist', true], ['Collect', true]]),
     mk('Negotiate atelier rent', 'Ask 8% reduction, offer 24-mo term.', 'Work', 'new', 'high', 0, 12, []),
   );
+  db.tasks.forEach(t => deriveStatusFromHeirs(t, true));
   save(); renderAll(); toast('Demo atelier seeded ✨', true);
 }
 
